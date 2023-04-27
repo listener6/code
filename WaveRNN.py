@@ -136,7 +136,7 @@ if __name__=="__main__":
     # 边界条件初始化
     pml_width=100
     pml_decay=1
-    known_wavefields=readData("./traindata/model_1/target.txt")
+    known_wavefields=readData("../traindata/model_1/target.txt")
 
     pml_coeff=torch.ones((nx+2*pml_width, ny+2*pml_width), dtype=torch.float32)
     # for i in range(pml_width):
@@ -174,7 +174,7 @@ if __name__=="__main__":
     # 设定损失函数和优化器
     criterion = nn.MSELoss()
     criterion=criterion.to(device)
-    writer = SummaryWriter("./loss")
+    writer = SummaryWriter("../loss")
     #TODO:损失太小了，需要调整学习率
     optimizer = torch.optim.Adam(model.parameters(), lr=0.4)
 
@@ -214,7 +214,7 @@ if __name__=="__main__":
             print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}')
 
         if (epoch + 1) % 100 == 0:
-            torch.save(model.state_dict(), "./model_save/model_f_{}.pth".format(epoch + 1))
+            torch.save(model.state_dict(), "../model_save/model_f_{}.pth".format(epoch + 1))
             print("model saved")
 
     # 训练结束后输出参数varray
