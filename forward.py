@@ -58,7 +58,7 @@ res=result[50:,:]
 # plt.show()
 
 
-filename = "./traindata/model_1/target.txt"
+filename = "../traindata/model_1/target.txt"
 os.makedirs(os.path.dirname(filename), exist_ok=True)
 np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
 
