@@ -34,8 +34,13 @@ initModel=np.zeros((100,100))
 initModel[0:30,:]=3000
 initModel[30:60,:]=3500
 initModel[60:,:]=4000
-initModel = torch.tensor(initModel,dtype=torch.float)
 
+
+# filename = "../traindata/model_1/model.txt"
+# os.makedirs(os.path.dirname(filename), exist_ok=True)
+# np.savetxt(filename, initModel, delimiter="\t",fmt='%.9f')
+
+initModel = torch.tensor(initModel,dtype=torch.float)
 model = CustomRNN(pml_coeff,source_function=s_t,varray_init=initModel,source_position=source_position,pml_width=pml_width,pml_decay=pml_decay)
 p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width)
 p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width)

@@ -93,7 +93,7 @@ class CustomRNN(nn.Module):
         x_s, y_s = x
         pml_varray=self.extend_with_pml(self.varray,self.pml_width)  #速度需要按照PML进行扩充
         alpha = (pml_varray ** 2 )*( self.dt ** 2 )   #alpha参数在一轮中，速度不变，参数也不变
-        p = torch.zeros_like(self.p1)
+        
         #稳定性判断
         DIFF_COEFF = np.array([0, 0.1261138E+1, -0.1297359E+0, 0.3989181E-1, -0.1590804E-1, 0.6780797E-2, -0.2804773E-2, 0.1034639E-2,-0.2505054E-3])
         limit = pml_varray.max() * self.dt * np.sqrt(1.0/self.dx/self.dx+1/self.dx/self.dx)*np.sum(np.fabs(DIFF_COEFF))
@@ -106,7 +106,7 @@ class CustomRNN(nn.Module):
         #初始波场p1,p2
         p1 = self.p1
         p2 = self.p2
-        gather = np.zeros((self.nt,self.ny))
+        gather = torch.zeros((self.nt,self.ny))
         for t in range(0, self.nt):
             
 
@@ -117,20 +117,24 @@ class CustomRNN(nn.Module):
             
             rhs = 2 * p2[8:-8, 8:-8] - p1[8:-8, 8:-8] + alpha[8:-8, 8:-8] * (dpdx[8:-8, :] + dpdy[:, 8:-8])
             
-            
+            p = torch.zeros_like(self.p1)
             p[8:-8,8:-8]=rhs
             
             #添加震源，p是扩充后波场
             p[x_s+self.pml_width, y_s+self.pml_width] += self.source_function[t]  * (self.dt ** 2)
+            
+            
             #res是所需大小波场
             res=p[self.pml_width:-self.pml_width,self.pml_width:-self.pml_width]
-            gather[t,:]=res[:,50].detach().numpy()
+            gather[t,:]=res[:,50]
 
+            
             p1=p2
+            
             p2=p
 
 
-        return p,res[:, 50]
+        return p,gather
 
 
     # #添加PML版本
@@ -242,7 +246,7 @@ if __name__=="__main__":
         overlook,output=model(input)
         target = known_wavefields.to(model.device)
         loss = criterion(output, target)
-        plt.imshow(overlook.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
+        plt.imshow(output.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
         plt.colorbar(label='Velocity m/s')
         plt.xlabel('x (m)')
         plt.ylabel('z (m)')

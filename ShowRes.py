@@ -8,7 +8,7 @@ import math
 import os
 from WaveRNN import CustomRNN
 
-epoch = 100
+epoch = 2000
 
 # 创建数据
 num_timesteps = 1000   #时间点
