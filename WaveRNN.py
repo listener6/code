@@ -149,7 +149,11 @@ if __name__=="__main__":
     # 边界条件初始化
     pml_width=100
     pml_decay=1
-    known_wavefields=readData("../traindata/model_1/target.txt")
+
+    #读入target
+    targets=torch.zeros(11,num_timesteps,ny)
+    for i in range(0,11):
+        targets[i]=readData(f"../traindata/model_2/target_{i}.txt")
 
     pml_coeff=torch.ones((nx+2*pml_width, ny+2*pml_width), dtype=torch.float32)
     # for i in range(pml_width):
@@ -187,30 +191,25 @@ if __name__=="__main__":
     # 设定损失函数和优化器
     criterion = nn.MSELoss()
     criterion=criterion.to(device)
-    writer = SummaryWriter("../loss")
+    writer = SummaryWriter("../loss/model_2")
     #TODO:损失太小了，需要调整学习率
     optimizer = torch.optim.Adam(model.parameters(), lr=0.2)
 
     # 训练循环
     num_epochs = 8000
     i=0
-    input=(0,50)
+    # input=(0,50)
     for epoch in range(num_epochs):
 
-        p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
-        p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
-
         loss = 0.0
-        
-        overlook,output=model(input)
-        target = known_wavefields.to(model.device)
-        loss = criterion(output, target)
-        # plt.imshow(output.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
-        # plt.colorbar(label='Velocity m/s')
-        # plt.xlabel('x (m)')
-        # plt.ylabel('z (m)')
-        # plt.title(f'{epoch}  result')
-        # plt.show()
+        for j in range(0,11):
+            
+            input=(0,j*10)
+            overlook,output=model(input)
+            output=output.to(device)
+            target = targets[j].to(model.device)
+            loss_j = criterion(output, target)
+            loss+=loss_j
 
         writer.add_scalar('training loss', loss.item(), i)
         i=i+1
@@ -222,8 +221,8 @@ if __name__=="__main__":
         if (epoch + 1) % 1 == 0:
             print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}')
 
-        if (epoch + 1) % 100 == 0:
-            torch.save(model.state_dict(), "../model_save/model_f_{}.pth".format(epoch + 1))
+        if (epoch + 1) % 10 == 0:
+            torch.save(model.state_dict(), "../model_save/model_2/model_f_{}.pth".format(epoch + 1))
             print("model saved")
 
     # # 训练结束后输出参数varray
