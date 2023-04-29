@@ -46,8 +46,8 @@ class CustomRNN(nn.Module):
         self.dx = dx
         self.nt=nt
 
-        self.p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
-        self.p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
+        self.p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(self.device)
+        self.p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(self.device)
 
         if varray_init is not None:
             self.varray = nn.Parameter(varray_init)
@@ -136,47 +136,6 @@ class CustomRNN(nn.Module):
 
         return p,gather
 
-
-    # #添加PML版本
-    # def forward(self, p1, p2, t):
-
-    #     x_s, y_s = self.source_position
-
-
-    #     p1 = p1*self.pml_coeff
-
-    #     p2 = p2*self.pml_coeff
-    #     pml_varray=self.extend_with_pml(self.varray,self.pml_width)  #速度需要按照PML进行扩充
-        
-    #     alpha = (pml_varray ** 2 )*( self.dt ** 2 )
-    #     DIFF_COEFF = np.array([0, 0.1261138E+1, -0.1297359E+0, 0.3989181E-1, -0.1590804E-1, 0.6780797E-2, -0.2804773E-2, 0.1034639E-2,-0.2505054E-3])
-    #     limit = pml_varray.max() * self.dt * np.sqrt(1.0/self.dx/self.dx+1/self.dx/self.dx)*np.sum(np.fabs(DIFF_COEFF))
-    #     if(limit > 1):
-    #         print("limit = ")
-    #         print(limit)
-    #         print("不满足稳定性条件.")
-    #         exit(0)
-        
-    #     #边界8个网格不算，衰减后可看作0
-    #     dpdx = (p2[:, 9:-7] - 2 * p2[:, 8:-8] + p2[:, 7:-9]) / (self.dx ** 2)
-        
-    #     dpdy = (p2[9:-7, :] - 2 * p2[8:-8, :] + p2[7:-9, :]) / (self.dx ** 2)
-        
-    #     rhs = 2 * p2[8:-8, 8:-8] - p1[8:-8, 8:-8] + alpha[8:-8, 8:-8] * (dpdx[8:-8, :] + dpdy[:, 8:-8])
-        
-    #     p = torch.zeros_like(p1)
-    #     p[8:-8,8:-8]=rhs
-        
-    #     # Add source term
-    #     p[x_s+self.pml_width, y_s+self.pml_width] += self.source_function[t]  * (self.dt ** 2)
-    #     # p[x_s+pml_width, y_s+pml_width] += self.source_function[t] * self.dt ** 2*alpha[x_s+pml_width, y_s+pml_width]
-    #     res=p[self.pml_width:-self.pml_width,self.pml_width:-self.pml_width]
-    #     return p,res[:, 50]
-    
-
-
-    
-    
     
 
 if __name__=="__main__":
@@ -230,7 +189,7 @@ if __name__=="__main__":
     criterion=criterion.to(device)
     writer = SummaryWriter("../loss")
     #TODO:损失太小了，需要调整学习率
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.2)
 
     # 训练循环
     num_epochs = 8000
@@ -246,12 +205,12 @@ if __name__=="__main__":
         overlook,output=model(input)
         target = known_wavefields.to(model.device)
         loss = criterion(output, target)
-        plt.imshow(output.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
-        plt.colorbar(label='Velocity m/s')
-        plt.xlabel('x (m)')
-        plt.ylabel('z (m)')
-        plt.title(f'{epoch}  result')
-        plt.show()
+        # plt.imshow(output.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
+        # plt.colorbar(label='Velocity m/s')
+        # plt.xlabel('x (m)')
+        # plt.ylabel('z (m)')
+        # plt.title(f'{epoch}  result')
+        # plt.show()
 
         writer.add_scalar('training loss', loss.item(), i)
         i=i+1
@@ -267,11 +226,11 @@ if __name__=="__main__":
             torch.save(model.state_dict(), "../model_save/model_f_{}.pth".format(epoch + 1))
             print("model saved")
 
-    # 训练结束后输出参数varray
-    trained_varray = model.varray.detach().cpu().numpy()
+    # # 训练结束后输出参数varray
+    # trained_varray = model.varray.detach().cpu().numpy()
 
-    print("Trained varray:")
-    print(trained_varray)
+    # print("Trained varray:")
+    # print(trained_varray)
 
 
 

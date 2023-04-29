@@ -8,14 +8,14 @@ import math
 import os
 from WaveRNN import CustomRNN
 
-epoch = 2000
+epoch = 1500
 
 # 创建数据
 num_timesteps = 1000   #时间点
 nx, ny = 100, 100
 
 #PML设置
-pml_width=200
+pml_width=100
 pml_decay=1
 pml_coeff=torch.ones((nx+2*pml_width, ny+2*pml_width), dtype=torch.float32)
 
@@ -35,7 +35,7 @@ initModel[30:60,:]=3500
 initModel[60:,:]=4000
 initModel = torch.tensor(initModel,dtype=torch.float)
 
-trained_model = CustomRNN(pml_coeff,source_function=s_t,varray_init=initModel,source_position=source_position,pml_width=pml_width,pml_decay=pml_decay)
+trained_model  = CustomRNN(source_function=s_t,varray_init=initModel,pml_width=pml_width,pml_decay=pml_decay)
 
 # 加载预训练的模型
 model_path = f"../model_save/model_f_{epoch}.pth"
