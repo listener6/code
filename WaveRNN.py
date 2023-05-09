@@ -10,6 +10,9 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 #定义MyDataset读取数据
 
+#保存loss和model的文件位置
+local='model_2'
+
 def readData(file_path):
     path = file_path # 输入    
     # Load input txt files as channels
@@ -86,9 +89,60 @@ class CustomRNN(nn.Module):
         extended_velocity_model=extended_velocity_model.to(self.device)
         return extended_velocity_model
 
+    # #添加PML版本
+    # #修改forward，炮位置x作为网络参数传入，炮集作为输出
+    # def forward(self,  x):
+
+    #     x_s, y_s = x
+    #     pml_varray=self.extend_with_pml(self.varray,self.pml_width)  #速度需要按照PML进行扩充
+    #     alpha = (pml_varray ** 2 )*( self.dt ** 2 )   #alpha参数在一轮中，速度不变，参数也不变
+        
+    #     #稳定性判断
+    #     DIFF_COEFF = np.array([0, 0.1261138E+1, -0.1297359E+0, 0.3989181E-1, -0.1590804E-1, 0.6780797E-2, -0.2804773E-2, 0.1034639E-2,-0.2505054E-3])
+    #     limit = pml_varray.max() * self.dt * np.sqrt(1.0/self.dx/self.dx+1/self.dx/self.dx)*np.sum(np.fabs(DIFF_COEFF))
+    #     if(limit > 1):
+    #         print("limit = ")
+    #         print(limit)
+    #         print("不满足稳定性条件.")
+    #         exit(0)
+
+    #     #初始波场p1,p2
+    #     p1 = self.p1
+    #     p2 = self.p2
+    #     gather = torch.zeros((self.nt,self.ny))
+    #     for t in range(0, self.nt):
+            
+
+    #         #边界8个网格不算，衰减后可看作0
+    #         dpdx = (p2[:, 9:-7] - 2 * p2[:, 8:-8] + p2[:, 7:-9]) / (self.dx ** 2)
+            
+    #         dpdy = (p2[9:-7, :] - 2 * p2[8:-8, :] + p2[7:-9, :]) / (self.dx ** 2)
+            
+    #         rhs = 2 * p2[8:-8, 8:-8] - p1[8:-8, 8:-8] + alpha[8:-8, 8:-8] * (dpdx[8:-8, :] + dpdy[:, 8:-8])
+            
+    #         p = torch.zeros_like(self.p1)
+    #         p[8:-8,8:-8]=rhs
+            
+    #         #添加震源，p是扩充后波场
+    #         p[x_s+self.pml_width, y_s+self.pml_width] += self.source_function[t]  * (self.dt ** 2)
+            
+            
+    #         #res是所需大小波场
+    #         res=p[self.pml_width:-self.pml_width,self.pml_width:-self.pml_width]
+    #         gather[t,:]=res[:,50]
+
+            
+    #         p1=p2
+            
+    #         p2=p
+
+
+    #     return p,gather
+
+
     #添加PML版本
-    #修改forward，炮位置x作为网络参数传入，炮集作为输出
-    def forward(self,  x):
+    #修改forward，炮位置x、时间t作为网络参数传入，当前时刻波场和炮集
+    def forward(self,  x, t, p1, p2):
 
         x_s, y_s = x
         pml_varray=self.extend_with_pml(self.varray,self.pml_width)  #速度需要按照PML进行扩充
@@ -104,37 +158,27 @@ class CustomRNN(nn.Module):
             exit(0)
 
         #初始波场p1,p2
-        p1 = self.p1
-        p2 = self.p2
-        gather = torch.zeros((self.nt,self.ny))
-        for t in range(0, self.nt):
-            
-
-            #边界8个网格不算，衰减后可看作0
-            dpdx = (p2[:, 9:-7] - 2 * p2[:, 8:-8] + p2[:, 7:-9]) / (self.dx ** 2)
-            
-            dpdy = (p2[9:-7, :] - 2 * p2[8:-8, :] + p2[7:-9, :]) / (self.dx ** 2)
-            
-            rhs = 2 * p2[8:-8, 8:-8] - p1[8:-8, 8:-8] + alpha[8:-8, 8:-8] * (dpdx[8:-8, :] + dpdy[:, 8:-8])
-            
-            p = torch.zeros_like(self.p1)
-            p[8:-8,8:-8]=rhs
-            
-            #添加震源，p是扩充后波场
-            p[x_s+self.pml_width, y_s+self.pml_width] += self.source_function[t]  * (self.dt ** 2)
-            
-            
-            #res是所需大小波场
-            res=p[self.pml_width:-self.pml_width,self.pml_width:-self.pml_width]
-            gather[t,:]=res[:,50]
-
-            
-            p1=p2
-            
-            p2=p
+ 
+        #边界8个网格不算，衰减后可看作0
+        dpdx = (p2[:, 9:-7] - 2 * p2[:, 8:-8] + p2[:, 7:-9]) / (self.dx ** 2)
+        
+        dpdy = (p2[9:-7, :] - 2 * p2[8:-8, :] + p2[7:-9, :]) / (self.dx ** 2)
+        
+        rhs = 2 * p2[8:-8, 8:-8] - p1[8:-8, 8:-8] + alpha[8:-8, 8:-8] * (dpdx[8:-8, :] + dpdy[:, 8:-8])
+        
+        p = torch.zeros_like(self.p1)
+        p[8:-8,8:-8]=rhs
+        
+        #添加震源，p是扩充后波场
+        p[x_s+self.pml_width, y_s+self.pml_width] += self.source_function[t]  * (self.dt ** 2)
+        
+        
+        #res是所需大小波场
+        res=p[self.pml_width:-self.pml_width,self.pml_width:-self.pml_width]
+        
 
 
-        return p,gather
+        return p,res[:,50]
 
     
 
@@ -191,7 +235,7 @@ if __name__=="__main__":
     # 设定损失函数和优化器
     criterion = nn.MSELoss()
     criterion=criterion.to(device)
-    writer = SummaryWriter("../loss/model_2")
+    writer = SummaryWriter(f"../loss/{local}")
     #TODO:损失太小了，需要调整学习率
     optimizer = torch.optim.Adam(model.parameters(), lr=0.2)
 
@@ -205,11 +249,20 @@ if __name__=="__main__":
         for j in range(0,11):
             
             input=(0,j*10)
-            overlook,output=model(input)
-            output=output.to(device)
-            target = targets[j].to(model.device)
-            loss_j = criterion(output, target)
-            loss+=loss_j
+            p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
+            p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
+            loss_t=0
+            for t in range(0,num_timesteps):
+                p3,output=model(input,t,p1,p2)
+                output=output.to(device)
+                target=targets[j,t,:].to(model.device)
+                loss_t+=criterion(output, target)
+
+                p1=p2.to(device)
+                p2=p3.to(device)
+
+            
+            loss+=loss_t
 
         writer.add_scalar('training loss', loss.item(), i)
         i=i+1
@@ -222,7 +275,7 @@ if __name__=="__main__":
             print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}')
 
         if (epoch + 1) % 10 == 0:
-            torch.save(model.state_dict(), "../model_save/model_2/model_f_{}.pth".format(epoch + 1))
+            torch.save(model.state_dict(), f"../model_save/{local}/model_f_{epoch + 1}.pth")
             print("model saved")
 
     # # 训练结束后输出参数varray
