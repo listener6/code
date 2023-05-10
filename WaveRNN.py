@@ -269,6 +269,31 @@ if __name__=="__main__":
         # 反向传播和优化
         optimizer.zero_grad()
         loss.backward()
+
+        # 对每个参数的梯度修正量进行区域平均
+        for group in optimizer.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                # 获取参数的形状和大小
+                shape = p.grad.shape
+                size = p.grad.numel()
+                # 将参数的梯度修正量展平为一维向量
+                grad_flat = p.grad.view(-1)
+                # 创建一个新的一维向量，用于存储区域平均后的梯度修正量
+                grad_avg = torch.zeros_like(grad_flat)
+                # 定义三个区域的索引范围
+                region1 = slice(0, 30 * 100) # [:,30,:]
+                region2 = slice(30 * 100, 60 * 100) # [30:60,:]
+                region3 = slice(60 * 100, size) # [60:,:]
+                # 对每个区域内的元素进行平均，并赋值给新向量
+                grad_avg[region1] = grad_flat[region1].mean()
+                grad_avg[region2] = grad_flat[region2].mean()
+                grad_avg[region3] = grad_flat[region3].mean()
+                # 将新向量恢复为原来的形状，并覆盖原来的梯度修正量
+                p.grad.copy_(grad_avg.view(shape))
+
+
         optimizer.step ()
 
         if (epoch + 1) % 1 == 0:
@@ -285,6 +310,40 @@ if __name__=="__main__":
     # print(trained_varray)
 
 
+# #自定义优化器
+# class CustomOptimizer(optim.Optimizer):
+#     def __init__(self, params, lr=1e-3, momentum=0, weight_decay=0):
+#         defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
+#         super(CustomOptimizer, self).__init__(params, defaults)
 
+#     def step(self, closure=None):
+#         loss = None
+#         if closure is not None:
+#             loss = closure()
+
+#         for group in self.param_groups:
+#             lr = group['lr']
+#             momentum = group['momentum']
+#             weight_decay = group['weight_decay']
+
+#             for p in group['params']:
+#                 if p.grad is None:
+#                     continue
+
+#                 grad = p.grad.data
+
+#                 if p[:30, :].numel() > 0:
+#                     p[:30, :].data.add_(-lr * torch.mean(grad[:30, :], dim=0))
+
+#                 if p[30:60, :].numel() > 0:
+#                     p[30:60, :].data.add_(-lr * torch.mean(grad[30:60, :], dim=0))
+
+#                 if p[60:, :].numel() > 0:
+#                     p[60:, :].data.add_(-lr * torch.mean(grad[60:, :], dim=0))
+
+#                 if weight_decay != 0:
+#                     p.data.add_(-weight_decay * lr, p.data)
+
+#         return loss
 
 
