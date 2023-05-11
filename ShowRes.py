@@ -8,7 +8,7 @@ import math
 import os
 from WaveRNN import CustomRNN
 
-epoch = 530
+epoch = 2700
 dir = 'model_3'
 
 # 创建数据

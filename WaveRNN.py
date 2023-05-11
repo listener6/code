@@ -290,8 +290,11 @@ if __name__=="__main__":
                 grad_avg[region1] = grad_flat[region1].mean()
                 grad_avg[region2] = grad_flat[region2].mean()
                 grad_avg[region3] = grad_flat[region3].mean()
-                # 将新向量恢复为原来的形状，并覆盖原来的梯度修正量
-                p.grad.copy_(grad_avg.view(shape))
+                # # 将新向量恢复为原来的形状，并覆盖原来的梯度修正量
+                # p.grad.copy_(grad_avg.view(shape))
+
+                #加入原本修正量，平均修正量和原本修正量权重相同
+                p.grad.copy_((grad_avg.view(shape) + p.grad) / 2)
 
 
         optimizer.step ()
