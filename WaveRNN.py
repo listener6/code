@@ -290,7 +290,6 @@ if __name__=="__main__":
             for t in range(0,num_timesteps):
 
                 p3,output=model(input,t,p1,p2)
-                print(p3[2,:])
                 output=output.to(device)
                 target=targets[j,t,:].to(model.device)
                 loss_t+=criterion(output, target)
