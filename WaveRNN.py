@@ -30,7 +30,29 @@ def readData(file_path):
     return data
 
 
+ #计算当前速度模型的梯度量
+def getDeltaV(varray):
+    nx,ny=varray.shape
 
+    dvx = torch.zeros(nx,ny)
+    dvz = torch.zeros(nx,ny)
+
+    # 计算x方向梯度
+    for i in range(1, 99):
+        for j in range(100):
+            dvx[i, j] = (varray[i+1, j] - varray[i-1, j]) / 2
+
+    # 计算y方向梯度
+    for i in range(100):
+        for j in range(1, 99):
+            dvz[i, j] = (varray[i, j+1] - varray[i, j-1]) / 2
+    #归一化梯度矩阵
+    dvx = (dvx - torch.min(dvx)) / (torch.max(dvx) - torch.min(dvx))
+    dvz = (dvz - torch.min(dvz)) / (torch.max(dvz) - torch.min(dvz))
+    dvx=dvx.to(device)
+    dvz=dvz.to(device)
+
+    return dvx, dvz
 
 #设置边界条件
 
@@ -88,6 +110,10 @@ class CustomRNN(nn.Module):
 
         extended_velocity_model=extended_velocity_model.to(self.device)
         return extended_velocity_model
+    
+   
+
+
 
     # #添加PML版本
     # #修改forward，炮位置x作为网络参数传入，炮集作为输出
@@ -221,6 +247,15 @@ if __name__=="__main__":
     s_t =  A *( 1 - 2 * math.pi * math.pi * FM * FM * t * t) * np.exp(-math.pi * math.pi * FM * FM * t * t)
     s_t = torch.tensor(s_t, dtype=torch.float).to(device)  # Move s_t to GPU
 
+
+    #真实速度模型
+    vTrue=np.zeros((100,100))
+    vTrue[0:30,:]=3000
+    vTrue[30:60,:]=3500
+    vTrue[60:,:]=4000
+    vTrue = torch.tensor(vTrue,dtype=torch.float).to(device)
+    target_dvx,target_dvz=getDeltaV(vTrue)
+
     # 初始速度模型
     initModel=np.zeros((100,100))
     initModel[0:30,:]=3000
@@ -253,7 +288,9 @@ if __name__=="__main__":
             p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
             loss_t=0
             for t in range(0,num_timesteps):
+
                 p3,output=model(input,t,p1,p2)
+                print(p3[2,:])
                 output=output.to(device)
                 target=targets[j,t,:].to(model.device)
                 loss_t+=criterion(output, target)
@@ -261,41 +298,18 @@ if __name__=="__main__":
                 p1=p2.to(device)
                 p2=p3.to(device)
 
-            
             loss+=loss_t
+            #计算速度结构损失
+            dvx,dvz=getDeltaV(model.varray)
+            loss+=criterion(dvx,target_dvx)
+            loss+=criterion(dvz,target_dvz)
+            #波场损失和速度机构损失作为共同损失
 
         writer.add_scalar('training loss', loss.item(), i)
         i=i+1
         # 反向传播和优化
         optimizer.zero_grad()
         loss.backward()
-
-        # 对每个参数的梯度修正量进行区域平均
-        for group in optimizer.param_groups:
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                # 获取参数的形状和大小
-                shape = p.grad.shape
-                size = p.grad.numel()
-                # 将参数的梯度修正量展平为一维向量
-                grad_flat = p.grad.view(-1)
-                # 创建一个新的一维向量，用于存储区域平均后的梯度修正量
-                grad_avg = torch.zeros_like(grad_flat)
-                # 定义三个区域的索引范围
-                region1 = slice(0, 30 * 100) # [:,30,:]
-                region2 = slice(30 * 100, 60 * 100) # [30:60,:]
-                region3 = slice(60 * 100, size) # [60:,:]
-                # 对每个区域内的元素进行平均，并赋值给新向量
-                grad_avg[region1] = grad_flat[region1].mean()
-                grad_avg[region2] = grad_flat[region2].mean()
-                grad_avg[region3] = grad_flat[region3].mean()
-                # # 将新向量恢复为原来的形状，并覆盖原来的梯度修正量
-                # p.grad.copy_(grad_avg.view(shape))
-
-                #加入原本修正量，平均修正量和原本修正量权重相同
-                p.grad.copy_((grad_avg.view(shape) + p.grad) / 2)
-
 
         optimizer.step ()
 
