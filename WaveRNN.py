@@ -47,8 +47,16 @@ def getDeltaV(varray):
         for j in range(1, 99):
             dvz[i, j] = (varray[i, j+1] - varray[i, j-1]) / 2
     #归一化梯度矩阵
-    dvx = (dvx - torch.min(dvx)) / (torch.max(dvx) - torch.min(dvx))
-    dvz = (dvz - torch.min(dvz)) / (torch.max(dvz) - torch.min(dvz))
+    if(torch.max(dvx) == torch.min(dvx)):
+        dvx=dvx
+    else:
+        dvx = (dvx - torch.min(dvx)) / (torch.max(dvx) - torch.min(dvx))
+    
+    if(torch.max(dvz) == torch.min(dvz)):
+        dvz=dvz
+    else:
+        dvz = (dvz - torch.min(dvz)) / (torch.max(dvz) - torch.min(dvz))
+
     dvx=dvx.to(device)
     dvz=dvz.to(device)
 
@@ -281,6 +289,11 @@ if __name__=="__main__":
     for epoch in range(num_epochs):
 
         loss = 0.0
+        #计算速度结构损失
+        dvx,dvz=getDeltaV(model.varray)
+        loss+=criterion(dvx,target_dvx)
+        loss+=criterion(dvz,target_dvz)
+        #波场损失和速度结构损失作为共同损失
         for j in range(0,11):
             
             input=(0,j*10)
@@ -298,11 +311,7 @@ if __name__=="__main__":
                 p2=p3.to(device)
 
             loss+=loss_t
-            #计算速度结构损失
-            dvx,dvz=getDeltaV(model.varray)
-            loss+=criterion(dvx,target_dvx)
-            loss+=criterion(dvz,target_dvz)
-            #波场损失和速度机构损失作为共同损失
+        
 
         writer.add_scalar('training loss', loss.item(), i)
         i=i+1
