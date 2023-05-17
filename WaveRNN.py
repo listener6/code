@@ -11,7 +11,8 @@ import os
 #定义MyDataset读取数据
 
 #保存loss和model的文件位置
-local='model_2'
+local='model_6'
+alpha=0.2
 
 def readData(file_path):
     path = file_path # 输入    
@@ -291,8 +292,8 @@ if __name__=="__main__":
         loss = 0.0
         #计算速度结构损失
         dvx,dvz=getDeltaV(model.varray)
-        loss+=criterion(dvx,target_dvx)
-        loss+=criterion(dvz,target_dvz)
+        loss+=alpha*criterion(dvx,target_dvx)
+        loss+=alpha*criterion(dvz,target_dvz)
         #波场损失和速度结构损失作为共同损失
         for j in range(0,11):
             
