@@ -11,7 +11,7 @@ import os
 #定义MyDataset读取数据
 
 #保存loss和model的文件位置
-local='model_6'
+local='model_7'
 alpha=0.2
 
 def readData(file_path):
@@ -281,95 +281,119 @@ if __name__=="__main__":
     criterion=criterion.to(device)
     writer = SummaryWriter(f"../loss/{local}")
     #TODO:损失太小了，需要调整学习率
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.2)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1)
 
-    # 训练循环
-    num_epochs = 8000
-    i=0
-    # input=(0,50)
-    for epoch in range(num_epochs):
 
-        loss = 0.0
-        #计算速度结构损失
-        dvx,dvz=getDeltaV(model.varray)
-        loss+=alpha*criterion(dvx,target_dvx)
-        loss+=alpha*criterion(dvz,target_dvz)
-        #波场损失和速度结构损失作为共同损失
-        for j in range(0,11):
+
+    # # 训练循环
+    # num_epochs = 8000
+    # i=0
+    # # input=(0,50)
+    # for epoch in range(num_epochs):
+
+    #     loss = 0.0
+    #     # #计算速度结构损失
+    #     # dvx,dvz=getDeltaV(model.varray)
+    #     # loss+=alpha*criterion(dvx,target_dvx)
+    #     # loss+=alpha*criterion(dvz,target_dvz)
+
+
+    #     #波场损失和速度结构损失作为共同损失
+    #     for j in range(0,11):
             
-            input=(0,j*10)
-            p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
-            p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
-            loss_t=0
-            for t in range(0,num_timesteps):
+    #         input=(0,j*10)
+    #         p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
+    #         p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
+    #         loss_t=0
+    #         for t in range(0,num_timesteps):
 
-                p3,output=model(input,t,p1,p2)
-                output=output.to(device)
-                target=targets[j,t,:].to(model.device)
-                loss_t+=criterion(output, target)
+    #             p3,output=model(input,t,p1,p2)
+    #             output=output.to(device)
+    #             target=targets[j,t,:].to(model.device)
+    #             loss_t+=criterion(output, target)
 
-                p1=p2.to(device)
-                p2=p3.to(device)
+    #             p1=p2.to(device)
+    #             p2=p3.to(device)
 
-            loss+=loss_t
+    #         loss+=loss_t
         
 
-        writer.add_scalar('training loss', loss.item(), i)
-        i=i+1
-        # 反向传播和优化
-        optimizer.zero_grad()
-        loss.backward()
+    #     writer.add_scalar('training loss', loss.item(), i)
+    #     i=i+1
+    #     # 反向传播和优化
+    #     optimizer.zero_grad()
+    #     loss.backward()
 
-        optimizer.step ()
+    #     optimizer.step ()
 
-        if (epoch + 1) % 1 == 0:
-            print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}')
+    #     if (epoch + 1) % 1 == 0:
+    #         print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}')
 
-        if (epoch + 1) % 10 == 0:
-            torch.save(model.state_dict(), f"../model_save/{local}/model_f_{epoch + 1}.pth")
-            print("model saved")
-
-    # # 训练结束后输出参数varray
-    # trained_varray = model.varray.detach().cpu().numpy()
-
-    # print("Trained varray:")
-    # print(trained_varray)
+    #     if (epoch + 1) % 10 == 0:
+    #         torch.save(model.state_dict(), f"../model_save/{local}/model_f_{epoch + 1}.pth")
+    #         print("model saved")
 
 
-# #自定义优化器
-# class CustomOptimizer(optim.Optimizer):
-#     def __init__(self, params, lr=1e-3, momentum=0, weight_decay=0):
-#         defaults = dict(lr=lr, momentum=momentum, weight_decay=weight_decay)
-#         super(CustomOptimizer, self).__init__(params, defaults)
+    loss_threshold=0.00001
+    p1=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
+    p2=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
+    p3=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
+    for t in range(0,num_timesteps):
+        cycle=0
+        while(True):
+            loss=0
+            optimizer.zero_grad()
+            for j in range(0,11):
+                input=(0,j*10)
+                p3[j],output=model(input,t,p1[j],p2[j])
+                output=output.to(device)
+                target=targets[j,t,:].to(model.device)
+                loss+=criterion(output, target)
 
-#     def step(self, closure=None):
-#         loss = None
-#         if closure is not None:
-#             loss = closure()
+            if(loss<loss_threshold):
+                for j in range(0,11):
+                    p1[j]=p2[j].to(device)
+                    p2[j]=p3[j].to(device)
+                break
+            print(f'Epoch [{t}--{cycle}/{num_timesteps}], Loss: {loss}')
+            wavep=p3[5].detach().cpu().numpy()
+            wave=wavep[pml_width:-pml_width,pml_width:-pml_width]
+            filename = f"../result/{local}/{t}-{cycle}-wave.txt"
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            np.savetxt(filename, wave, delimiter="\t",fmt='%.9f')
 
-#         for group in self.param_groups:
-#             lr = group['lr']
-#             momentum = group['momentum']
-#             weight_decay = group['weight_decay']
+            optimizer.zero_grad()
+            loss.backward(retain_graph=True)
+            optimizer.step ()
+            cycle=cycle+1
+            result = model.varray.detach().cpu().numpy()
+            filename = f"../result/{local}/{t}-{cycle}-time.txt"
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
+            
+            # print(result)
 
-#             for p in group['params']:
-#                 if p.grad is None:
-#                     continue
+        result = model.varray.detach().cpu().numpy()
+        #保存结果
+        filename = f"../result/{local}/{t}time.txt"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
+        print(f'Epoch [{t }/{num_timesteps}], Loss: {loss}')
 
-#                 grad = p.grad.data
+        wavep=p3[5].detach().cpu().numpy()
+        wave=wavep[pml_width:-pml_width,pml_width:-pml_width]
+        filename = f"../result/{local}/{t}wave.txt"
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        np.savetxt(filename, wave, delimiter="\t",fmt='%.9f')
 
-#                 if p[:30, :].numel() > 0:
-#                     p[:30, :].data.add_(-lr * torch.mean(grad[:30, :], dim=0))
 
-#                 if p[30:60, :].numel() > 0:
-#                     p[30:60, :].data.add_(-lr * torch.mean(grad[30:60, :], dim=0))
 
-#                 if p[60:, :].numel() > 0:
-#                     p[60:, :].data.add_(-lr * torch.mean(grad[60:, :], dim=0))
 
-#                 if weight_decay != 0:
-#                     p.data.add_(-weight_decay * lr, p.data)
 
-#         return loss
+            
+        
+
+                
+
 
 
