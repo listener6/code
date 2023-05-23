@@ -8,8 +8,8 @@ import math
 import os
 from WaveRNN import CustomRNN
 
-epoch = 120
-dir = 'model_5'
+epoch = 280
+dir = 'model_8'
 
 # 创建数据
 num_timesteps = 1000   #时间点

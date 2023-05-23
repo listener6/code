@@ -8,12 +8,14 @@ import matplotlib.pyplot as plt
 import math
 from torch.utils.tensorboard import SummaryWriter
 import os
-#定义MyDataset读取数据
+from torch.nn.parallel import parallel_apply
+
 
 #保存loss和model的文件位置
-local='model_7'
+local='model_8'
 alpha=0.2
 
+#读取txt数据
 def readData(file_path):
     path = file_path # 输入    
     # Load input txt files as channels
@@ -32,36 +34,36 @@ def readData(file_path):
 
 
  #计算当前速度模型的梯度量
-def getDeltaV(varray):
-    nx,ny=varray.shape
+# def getDeltaV(varray):
+#     nx,ny=varray.shape
 
-    dvx = torch.zeros(nx,ny)
-    dvz = torch.zeros(nx,ny)
+#     dvx = torch.zeros(nx,ny)
+#     dvz = torch.zeros(nx,ny)
 
-    # 计算x方向梯度
-    for i in range(1, 99):
-        for j in range(100):
-            dvx[i, j] = (varray[i+1, j] - varray[i-1, j]) / 2
+#     # 计算x方向梯度
+#     for i in range(1, 99):
+#         for j in range(100):
+#             dvx[i, j] = (varray[i+1, j] - varray[i-1, j]) / 2
 
-    # 计算y方向梯度
-    for i in range(100):
-        for j in range(1, 99):
-            dvz[i, j] = (varray[i, j+1] - varray[i, j-1]) / 2
-    #归一化梯度矩阵
-    if(torch.max(dvx) == torch.min(dvx)):
-        dvx=dvx
-    else:
-        dvx = (dvx - torch.min(dvx)) / (torch.max(dvx) - torch.min(dvx))
+#     # 计算y方向梯度
+#     for i in range(100):
+#         for j in range(1, 99):
+#             dvz[i, j] = (varray[i, j+1] - varray[i, j-1]) / 2
+#     #归一化梯度矩阵
+#     if(torch.max(dvx) == torch.min(dvx)):
+#         dvx=dvx
+#     else:
+#         dvx = (dvx - torch.min(dvx)) / (torch.max(dvx) - torch.min(dvx))
     
-    if(torch.max(dvz) == torch.min(dvz)):
-        dvz=dvz
-    else:
-        dvz = (dvz - torch.min(dvz)) / (torch.max(dvz) - torch.min(dvz))
+#     if(torch.max(dvz) == torch.min(dvz)):
+#         dvz=dvz
+#     else:
+#         dvz = (dvz - torch.min(dvz)) / (torch.max(dvz) - torch.min(dvz))
 
-    dvx=dvx.to(device)
-    dvz=dvz.to(device)
+#     dvx=dvx.to(device)
+#     dvz=dvz.to(device)
 
-    return dvx, dvz
+#     return dvx, dvz
 
 #设置边界条件
 
@@ -258,22 +260,26 @@ if __name__=="__main__":
 
 
     #真实速度模型
-    vTrue=np.zeros((100,100))
-    vTrue[0:30,:]=3000
-    vTrue[30:60,:]=3500
-    vTrue[60:,:]=4000
-    vTrue = torch.tensor(vTrue,dtype=torch.float).to(device)
-    target_dvx,target_dvz=getDeltaV(vTrue)
+    vTrue=readData("../traindata/model_2/model.txt")
+    # vTrue=np.zeros((100,100))
+    # vTrue[0:30,:]=3000
+    # vTrue[30:60,:]=3500
+    # vTrue[60:,:]=4000
+    vTrue = vTrue.to(device)
+    # target_dvx,target_dvz=getDeltaV(vTrue)
 
     # 初始速度模型
+    #initModel=readData("../traindata/model_2/model.txt")
+
     initModel=np.zeros((100,100))
     initModel[0:30,:]=3000
     initModel[30:60,:]=3400
     initModel[60:,:]=3900
     initModel = torch.tensor(initModel,dtype=torch.float).to(device)
 
-    # 模型初始化
+    # 模型初始化 
     model = CustomRNN(source_function=s_t,varray_init=initModel,pml_width=pml_width,pml_decay=pml_decay)
+    
     model = model.to(device)
 
     # 设定损失函数和优化器
@@ -334,62 +340,126 @@ if __name__=="__main__":
     #         print("model saved")
 
 
+    # loss_threshold=0.00001
+    # p1=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
+    # p2=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
+    # p3=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
+    # for t in range(0,num_timesteps):
+    #     cycle=0
+    #     while(True):
+    #         loss=0
+    #         optimizer.zero_grad()
+    #         for j in range(0,11):
+    #             input=(0,j*10)
+    #             p3[j],output=model(input,t,p1[j],p2[j])
+    #             output=output.to(device)
+    #             target=targets[j,t,:].to(model.device)
+    #             loss+=criterion(output, target)
+
+    #         if(loss<loss_threshold):
+    #             for j in range(0,11):
+    #                 p1[j]=p2[j].to(device)
+    #                 p2[j]=p3[j].to(device)
+    #             break
+    #         print(f'Epoch [{t}--{cycle}/{num_timesteps}], Loss: {loss}')
+    #         wavep=p3[5].detach().cpu().numpy()
+    #         wave=wavep[pml_width:-pml_width,pml_width:-pml_width]
+    #         filename = f"../result/{local}/{t}-{cycle}-wave.txt"
+    #         os.makedirs(os.path.dirname(filename), exist_ok=True)
+    #         np.savetxt(filename, wave, delimiter="\t",fmt='%.9f')
+
+    #         optimizer.zero_grad()
+    #         loss.backward(retain_graph=True)
+    #         optimizer.step ()
+    #         cycle=cycle+1
+    #         result = model.varray.detach().cpu().numpy()
+    #         filename = f"../result/{local}/{t}-{cycle}-time.txt"
+    #         os.makedirs(os.path.dirname(filename), exist_ok=True)
+    #         np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
+            
+    #         # print(result)
+
+    #     result = model.varray.detach().cpu().numpy()
+    #     #保存结果
+    #     filename = f"../result/{local}/{t}time.txt"
+    #     os.makedirs(os.path.dirname(filename), exist_ok=True)
+    #     np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
+    #     print(f'Epoch [{t }/{num_timesteps}], Loss: {loss}')
+
+    #     wavep=p3[5].detach().cpu().numpy()
+    #     wave=wavep[pml_width:-pml_width,pml_width:-pml_width]
+    #     filename = f"../result/{local}/{t}wave.txt"
+    #     os.makedirs(os.path.dirname(filename), exist_ok=True)
+    #     np.savetxt(filename, wave, delimiter="\t",fmt='%.9f')
+
+
+
+    # 定义单个炮的计算模块
+    class ComputeLossModule(nn.Module):
+        def __init__(self, j, epoch):
+            super(ComputeLossModule, self).__init__()
+            self.j = j
+            self.epoch = epoch
+
+        def forward(self, _):
+            input = (0, self.j * 10)
+            p1 = torch.zeros(nx + 2 * pml_width, ny + 2 * pml_width).to(device)
+            p2 = torch.zeros(nx + 2 * pml_width, ny + 2 * pml_width).to(device)
+            loss_t = 0
+
+            for t in range(0, self.epoch):
+                p3, output = model(input, t, p1, p2)
+                output = output.to(device)
+                target = targets[self.j, t, :].to(device)
+                loss_t += criterion(output, target)
+
+                p1 = p2.to(device)
+                p2 = p3.to(device)
+
+            return loss_t
+
+
     loss_threshold=0.00001
-    p1=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
-    p2=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
-    p3=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
-    for t in range(0,num_timesteps):
-        cycle=0
-        while(True):
-            loss=0
-            optimizer.zero_grad()
-            for j in range(0,11):
-                input=(0,j*10)
-                p3[j],output=model(input,t,p1[j],p2[j])
-                output=output.to(device)
-                target=targets[j,t,:].to(model.device)
-                loss+=criterion(output, target)
+    # 训练循环
+    num_epochs = num_timesteps
+    i=0
+    # input=(0,50)
+    for epoch in range(1,num_epochs):
+        while(1):
+            loss = 0.0
+            
+            #11炮共同反演，并行计算11炮
+            # 创建模块列表
+            module_list = [ComputeLossModule(j, epoch) for j in range(0, 11)]
+            # 准备输入列表（在这里不会被使用）
+            input_list = [None] * len(module_list)
+            # 并行计算每个炮的损失
+            loss_list = parallel_apply(module_list, input_list, devices=None)
+            # 求和所有炮的损失
+            loss = sum(loss_list)
+
+            writer.add_scalar('training loss', loss.item(), i)
+            i=i+1
+            if (epoch + 1) % 1 == 0:
+                print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}')
+
+            if (epoch + 1) % 10 == 0:
+                filename = f"../model_save/{local}/model_f_{epoch + 1}.pth"
+                os.makedirs(os.path.dirname(filename), exist_ok=True)
+                torch.save(model.state_dict(), filename)
+                print("model saved")
 
             if(loss<loss_threshold):
-                for j in range(0,11):
-                    p1[j]=p2[j].to(device)
-                    p2[j]=p3[j].to(device)
                 break
-            print(f'Epoch [{t}--{cycle}/{num_timesteps}], Loss: {loss}')
-            wavep=p3[5].detach().cpu().numpy()
-            wave=wavep[pml_width:-pml_width,pml_width:-pml_width]
-            filename = f"../result/{local}/{t}-{cycle}-wave.txt"
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
-            np.savetxt(filename, wave, delimiter="\t",fmt='%.9f')
-
+            # 反向传播和优化
             optimizer.zero_grad()
-            loss.backward(retain_graph=True)
+            loss.backward()
             optimizer.step ()
-            cycle=cycle+1
-            result = model.varray.detach().cpu().numpy()
-            filename = f"../result/{local}/{t}-{cycle}-time.txt"
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
-            np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
-            
-            # print(result)
 
-        result = model.varray.detach().cpu().numpy()
-        #保存结果
-        filename = f"../result/{local}/{t}time.txt"
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
-        print(f'Epoch [{t }/{num_timesteps}], Loss: {loss}')
-
-        wavep=p3[5].detach().cpu().numpy()
-        wave=wavep[pml_width:-pml_width,pml_width:-pml_width]
-        filename = f"../result/{local}/{t}wave.txt"
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        np.savetxt(filename, wave, delimiter="\t",fmt='%.9f')
-
-
-
-
-
+    filename = f"../model_save/{local}/model_f_final.pth"
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    torch.save(model.state_dict(), filename)
+    print("final model saved")
             
         
 
