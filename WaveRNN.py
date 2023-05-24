@@ -9,7 +9,7 @@ import math
 from torch.utils.tensorboard import SummaryWriter
 import os
 from torch.nn.parallel import parallel_apply
-
+import time
 
 #保存loss和model的文件位置
 local='model_8'
@@ -33,37 +33,6 @@ def readData(file_path):
     return data
 
 
- #计算当前速度模型的梯度量
-# def getDeltaV(varray):
-#     nx,ny=varray.shape
-
-#     dvx = torch.zeros(nx,ny)
-#     dvz = torch.zeros(nx,ny)
-
-#     # 计算x方向梯度
-#     for i in range(1, 99):
-#         for j in range(100):
-#             dvx[i, j] = (varray[i+1, j] - varray[i-1, j]) / 2
-
-#     # 计算y方向梯度
-#     for i in range(100):
-#         for j in range(1, 99):
-#             dvz[i, j] = (varray[i, j+1] - varray[i, j-1]) / 2
-#     #归一化梯度矩阵
-#     if(torch.max(dvx) == torch.min(dvx)):
-#         dvx=dvx
-#     else:
-#         dvx = (dvx - torch.min(dvx)) / (torch.max(dvx) - torch.min(dvx))
-    
-#     if(torch.max(dvz) == torch.min(dvz)):
-#         dvz=dvz
-#     else:
-#         dvz = (dvz - torch.min(dvz)) / (torch.max(dvz) - torch.min(dvz))
-
-#     dvx=dvx.to(device)
-#     dvz=dvz.to(device)
-
-#     return dvx, dvz
 
 #设置边界条件
 
@@ -109,7 +78,7 @@ class CustomRNN(nn.Module):
 
         # 复制边界速度值以填充 PML 层
         extended_velocity_model[:pml_thickness, pml_thickness:-pml_thickness] = velocity_model[0, :].unsqueeze(0).expand(pml_thickness, nx)
-        extended_velocity_model[-pml_thickness:, pml_thickness:-pml_thickness] = velocity_model[-1, :].unsqueeze(0).expand(pml_thickness, nx)
+        extended_velocity_model[-pml_thickness:, pml_thickness:-pml_thickness] = 0
         extended_velocity_model[pml_thickness:-pml_thickness, :pml_thickness] = velocity_model[:, 0].unsqueeze(1).expand(ny, pml_thickness)
         extended_velocity_model[pml_thickness:-pml_thickness, -pml_thickness:] = velocity_model[:, -1].unsqueeze(1).expand(ny, pml_thickness)
 
@@ -122,59 +91,7 @@ class CustomRNN(nn.Module):
         extended_velocity_model=extended_velocity_model.to(self.device)
         return extended_velocity_model
     
-   
 
-
-
-    # #添加PML版本
-    # #修改forward，炮位置x作为网络参数传入，炮集作为输出
-    # def forward(self,  x):
-
-    #     x_s, y_s = x
-    #     pml_varray=self.extend_with_pml(self.varray,self.pml_width)  #速度需要按照PML进行扩充
-    #     alpha = (pml_varray ** 2 )*( self.dt ** 2 )   #alpha参数在一轮中，速度不变，参数也不变
-        
-    #     #稳定性判断
-    #     DIFF_COEFF = np.array([0, 0.1261138E+1, -0.1297359E+0, 0.3989181E-1, -0.1590804E-1, 0.6780797E-2, -0.2804773E-2, 0.1034639E-2,-0.2505054E-3])
-    #     limit = pml_varray.max() * self.dt * np.sqrt(1.0/self.dx/self.dx+1/self.dx/self.dx)*np.sum(np.fabs(DIFF_COEFF))
-    #     if(limit > 1):
-    #         print("limit = ")
-    #         print(limit)
-    #         print("不满足稳定性条件.")
-    #         exit(0)
-
-    #     #初始波场p1,p2
-    #     p1 = self.p1
-    #     p2 = self.p2
-    #     gather = torch.zeros((self.nt,self.ny))
-    #     for t in range(0, self.nt):
-            
-
-    #         #边界8个网格不算，衰减后可看作0
-    #         dpdx = (p2[:, 9:-7] - 2 * p2[:, 8:-8] + p2[:, 7:-9]) / (self.dx ** 2)
-            
-    #         dpdy = (p2[9:-7, :] - 2 * p2[8:-8, :] + p2[7:-9, :]) / (self.dx ** 2)
-            
-    #         rhs = 2 * p2[8:-8, 8:-8] - p1[8:-8, 8:-8] + alpha[8:-8, 8:-8] * (dpdx[8:-8, :] + dpdy[:, 8:-8])
-            
-    #         p = torch.zeros_like(self.p1)
-    #         p[8:-8,8:-8]=rhs
-            
-    #         #添加震源，p是扩充后波场
-    #         p[x_s+self.pml_width, y_s+self.pml_width] += self.source_function[t]  * (self.dt ** 2)
-            
-            
-    #         #res是所需大小波场
-    #         res=p[self.pml_width:-self.pml_width,self.pml_width:-self.pml_width]
-    #         gather[t,:]=res[:,50]
-
-            
-    #         p1=p2
-            
-    #         p2=p
-
-
-    #     return p,gather
 
 
     #添加PML版本
@@ -207,7 +124,7 @@ class CustomRNN(nn.Module):
         p[8:-8,8:-8]=rhs
         
         #添加震源，p是扩充后波场
-        p[x_s+self.pml_width, y_s+self.pml_width] += self.source_function[t]  * (self.dt ** 2)
+        p[x_s+self.pml_width, y_s+self.pml_width] -= self.source_function[t]  * alpha[x_s+self.pml_width, y_s+self.pml_width]
         
         
         #res是所需大小波场
@@ -291,109 +208,7 @@ if __name__=="__main__":
 
 
 
-    # # 训练循环
-    # num_epochs = 8000
-    # i=0
-    # # input=(0,50)
-    # for epoch in range(num_epochs):
-
-    #     loss = 0.0
-    #     # #计算速度结构损失
-    #     # dvx,dvz=getDeltaV(model.varray)
-    #     # loss+=alpha*criterion(dvx,target_dvx)
-    #     # loss+=alpha*criterion(dvz,target_dvz)
-
-
-    #     #波场损失和速度结构损失作为共同损失
-    #     for j in range(0,11):
-            
-    #         input=(0,j*10)
-    #         p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
-    #         p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
-    #         loss_t=0
-    #         for t in range(0,num_timesteps):
-
-    #             p3,output=model(input,t,p1,p2)
-    #             output=output.to(device)
-    #             target=targets[j,t,:].to(model.device)
-    #             loss_t+=criterion(output, target)
-
-    #             p1=p2.to(device)
-    #             p2=p3.to(device)
-
-    #         loss+=loss_t
-        
-
-    #     writer.add_scalar('training loss', loss.item(), i)
-    #     i=i+1
-    #     # 反向传播和优化
-    #     optimizer.zero_grad()
-    #     loss.backward()
-
-    #     optimizer.step ()
-
-    #     if (epoch + 1) % 1 == 0:
-    #         print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss}')
-
-    #     if (epoch + 1) % 10 == 0:
-    #         torch.save(model.state_dict(), f"../model_save/{local}/model_f_{epoch + 1}.pth")
-    #         print("model saved")
-
-
-    # loss_threshold=0.00001
-    # p1=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
-    # p2=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
-    # p3=torch.zeros(11,nx+2*pml_width, ny+2*pml_width).to(device)
-    # for t in range(0,num_timesteps):
-    #     cycle=0
-    #     while(True):
-    #         loss=0
-    #         optimizer.zero_grad()
-    #         for j in range(0,11):
-    #             input=(0,j*10)
-    #             p3[j],output=model(input,t,p1[j],p2[j])
-    #             output=output.to(device)
-    #             target=targets[j,t,:].to(model.device)
-    #             loss+=criterion(output, target)
-
-    #         if(loss<loss_threshold):
-    #             for j in range(0,11):
-    #                 p1[j]=p2[j].to(device)
-    #                 p2[j]=p3[j].to(device)
-    #             break
-    #         print(f'Epoch [{t}--{cycle}/{num_timesteps}], Loss: {loss}')
-    #         wavep=p3[5].detach().cpu().numpy()
-    #         wave=wavep[pml_width:-pml_width,pml_width:-pml_width]
-    #         filename = f"../result/{local}/{t}-{cycle}-wave.txt"
-    #         os.makedirs(os.path.dirname(filename), exist_ok=True)
-    #         np.savetxt(filename, wave, delimiter="\t",fmt='%.9f')
-
-    #         optimizer.zero_grad()
-    #         loss.backward(retain_graph=True)
-    #         optimizer.step ()
-    #         cycle=cycle+1
-    #         result = model.varray.detach().cpu().numpy()
-    #         filename = f"../result/{local}/{t}-{cycle}-time.txt"
-    #         os.makedirs(os.path.dirname(filename), exist_ok=True)
-    #         np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
-            
-    #         # print(result)
-
-    #     result = model.varray.detach().cpu().numpy()
-    #     #保存结果
-    #     filename = f"../result/{local}/{t}time.txt"
-    #     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    #     np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
-    #     print(f'Epoch [{t }/{num_timesteps}], Loss: {loss}')
-
-    #     wavep=p3[5].detach().cpu().numpy()
-    #     wave=wavep[pml_width:-pml_width,pml_width:-pml_width]
-    #     filename = f"../result/{local}/{t}wave.txt"
-    #     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    #     np.savetxt(filename, wave, delimiter="\t",fmt='%.9f')
-
-
-
+    
     # 定义单个炮的计算模块
     class ComputeLossModule(nn.Module):
         def __init__(self, j, epoch):
@@ -426,6 +241,7 @@ if __name__=="__main__":
     # input=(0,50)
     for epoch in range(1,num_epochs):
         while(1):
+            
             loss = 0.0
             
             #11炮共同反演，并行计算11炮
@@ -437,7 +253,8 @@ if __name__=="__main__":
             loss_list = parallel_apply(module_list, input_list, devices=None)
             # 求和所有炮的损失
             loss = sum(loss_list)
-
+        
+            
             writer.add_scalar('training loss', loss.item(), i)
             i=i+1
             if (epoch + 1) % 1 == 0:
@@ -452,10 +269,11 @@ if __name__=="__main__":
             if(loss<loss_threshold):
                 break
             # 反向传播和优化
+            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step ()
-
+            
     filename = f"../model_save/{local}/model_f_final.pth"
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     torch.save(model.state_dict(), filename)

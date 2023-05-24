@@ -8,8 +8,8 @@ import math
 import os
 from WaveRNN import CustomRNN
 
-epoch = 280
-dir = 'model_8'
+epoch = 520
+local = 'model_8'
 
 # 创建数据
 num_timesteps = 1000   #时间点
@@ -39,7 +39,7 @@ initModel = torch.tensor(initModel,dtype=torch.float)
 trained_model  = CustomRNN(source_function=s_t,varray_init=initModel,pml_width=pml_width,pml_decay=pml_decay)
 
 # 加载预训练的模型
-model_path = f"../model_save/{dir}/model_f_{epoch}.pth"
+model_path = f"../model_save/{local}/model_f_{epoch}.pth"
 trained_model.load_state_dict(torch.load(model_path,map_location=torch.device('cpu')))
 
 result = trained_model.varray.detach().cpu().numpy()
@@ -52,7 +52,7 @@ plt.title(f'{epoch}  result')
 plt.show()
 
 #保存结果
-filename = f"../result/{dir}/{epoch}epoch.txt"
+filename = f"../result/{local}/{epoch}epoch.txt"
 os.makedirs(os.path.dirname(filename), exist_ok=True)
 np.savetxt(filename, result, delimiter="\t",fmt='%.9f')
 

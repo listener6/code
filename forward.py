@@ -8,7 +8,8 @@ import math
 import os
 from WaveRNN import CustomRNN
 
-
+#模型名
+local='model3'
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # 创建数据
@@ -60,29 +61,31 @@ model = model.to(device)
 #批量生成11炮炮集数据
 for i in range(0,11):
     input=(0,i*10)
-    overlook,output=model(input)
-    plt.imshow(overlook.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
+    result=torch.zeros(num_timesteps,ny)
+    p1 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
+    p2 = torch.zeros(nx+2*pml_width, ny+2*pml_width).to(device)
+    for t in range(0,num_timesteps):
+
+        p3,output=model(input,t,p1,p2)
+        result[t,:]=output
+        p1=p2.to(device)
+        p2=p3.to(device)
+
+    #查看波场
+    plt.imshow(p3.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
+    # #查看炮集
+    # plt.imshow(result.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
     plt.colorbar(label='')
     plt.xlabel('x (m)')
     plt.ylabel('t(0.0005s)')
     plt.title('Final result')
     plt.show()
-    filename = f"../traindata/model_2/target_{i}.txt"
+    filename = f"../traindata/{local}/target_{i}.txt"
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    np.savetxt(filename, output.detach().numpy(), delimiter="\t",fmt='%.9f')
+    np.savetxt(filename, result.detach().numpy(), delimiter="\t",fmt='%.9f')
 
 
-plt.imshow(output.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
-plt.colorbar(label='')
-plt.xlabel('x (m)')
-plt.ylabel('t(0.0005s)')
-plt.title('Final result')
-plt.show()
 
-
-# filename = "../traindata/model_2/target_0.txt"
-# os.makedirs(os.path.dirname(filename), exist_ok=True)
-# np.savetxt(filename, output.detach().numpy(), delimiter="\t",fmt='%.9f')
 
 
     
