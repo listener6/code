@@ -7,9 +7,10 @@ import matplotlib.pyplot as plt
 import math
 import os
 from WaveRNN import CustomRNN
+import WaveRNN as WR
 
 #模型名
-local='model3'
+local='model_2'
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # 创建数据
@@ -47,14 +48,16 @@ initModel=np.zeros((100,100))
 initModel[0:30,:]=3000
 initModel[30:60,:]=3500
 initModel[60:,:]=4000
+initModel = torch.tensor(initModel,dtype=torch.float)
 
+# initModel=WR.readData("../traindata/model_3/modeltrue.txt")
 
 # filename = "../traindata/model_1/model.txt"
 # os.makedirs(os.path.dirname(filename), exist_ok=True)
 # np.savetxt(filename, initModel, delimiter="\t",fmt='%.9f')
 
 # input = (0,0)  #震源位置
-initModel = torch.tensor(initModel,dtype=torch.float)
+
 model = CustomRNN(source_function=s_t,varray_init=initModel,pml_width=pml_width,pml_decay=pml_decay)
 model = model.to(device)
 
@@ -71,10 +74,10 @@ for i in range(0,11):
         p1=p2.to(device)
         p2=p3.to(device)
 
-    #查看波场
-    plt.imshow(p3.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
-    # #查看炮集
-    # plt.imshow(result.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
+    # #查看波场
+    # plt.imshow(p3.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
+    #查看炮集
+    plt.imshow(result.detach().numpy(),cmap='jet',origin='upper',aspect='auto')
     plt.colorbar(label='')
     plt.xlabel('x (m)')
     plt.ylabel('t(0.0005s)')
